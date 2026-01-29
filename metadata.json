@@ -1,0 +1,7 @@
+{
+  "name": "Smart Bulk E-commerce Image Processor",
+  "description": "An advanced tool for bulk processing product images with AI-driven smart logo placement, central watermarking, and high-quality ZIP exporting.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

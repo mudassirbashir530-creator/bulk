@@ -1,0 +1,158 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Liquid HD | Production Engine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    
+    body { 
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #020617; 
+    }
+
+    /* Production Liquid Background - 3 Orbs: Blue, Purple, Pink */
+    .liquid-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: -1;
+      overflow: hidden;
+      background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
+    }
+
+    .blob {
+      position: absolute;
+      width: 80vw;
+      height: 80vw;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.5;
+      mix-blend-mode: screen;
+      animation: float 20s infinite alternate ease-in-out;
+    }
+
+    .blob-blue {
+      background: radial-gradient(circle, #3b82f6 0%, transparent 70%);
+      top: -20%;
+      left: -10%;
+    }
+
+    .blob-purple {
+      background: radial-gradient(circle, #a855f7 0%, transparent 70%);
+      bottom: -30%;
+      right: -10%;
+      animation-delay: -7s;
+    }
+
+    .blob-pink {
+      background: radial-gradient(circle, #ec4899 0%, transparent 70%);
+      top: 40%;
+      left: 30%;
+      width: 60vw;
+      height: 60vw;
+      animation-delay: -14s;
+    }
+
+    @keyframes float {
+      0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+      50% { transform: translate(15%, 10%) scale(1.2) rotate(5deg); }
+      100% { transform: translate(-5%, 15%) scale(0.9) rotate(-5deg); }
+    }
+
+    /* iOS Glassmorphism V3 */
+    .glass {
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* 3D Glossy Buttons */
+    .btn-glossy {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.05) 100%);
+      border: 1px solid rgba(255,255,255,0.4);
+      backdrop-filter: blur(10px);
+      box-shadow: 
+        inset 0 1px 1px rgba(255,255,255,0.4),
+        0 10px 20px rgba(0,0,0,0.2);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .btn-glossy::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -150%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.4),
+        transparent
+      );
+      transition: all 0.7s ease;
+    }
+
+    .btn-glossy:hover {
+      transform: translateY(-2px) scale(1.02);
+      border: 1px solid rgba(255,255,255,0.6);
+      box-shadow: 
+        inset 0 1px 1px rgba(255,255,255,0.5),
+        0 15px 30px rgba(0,0,0,0.3);
+    }
+
+    .btn-glossy:hover::before {
+      left: 150%;
+    }
+
+    .btn-glossy:active {
+      transform: translateY(1px) scale(0.98);
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "@heroicons/react/": "https://esm.sh/@heroicons/react@^2.2.0/"
+  }
+}
+</script>
+</head>
+<body>
+  <div class="liquid-bg">
+    <div class="blob blob-blue"></div>
+    <div class="blob blob-purple"></div>
+    <div class="blob blob-pink"></div>
+  </div>
+  <div id="root"></div>
+</body>
+</html>
