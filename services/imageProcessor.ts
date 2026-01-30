@@ -1,5 +1,4 @@
 
-// Fix: Import SmartPlacement from types.ts where it is defined and exported.
 import { ProcessingOptions, SmartPlacement } from "../types";
 
 const loadImage = (url: string): Promise<HTMLImageElement> => {
@@ -13,18 +12,18 @@ const loadImage = (url: string): Promise<HTMLImageElement> => {
 };
 
 /**
- * HD Liquid Image Processor (V2.4 - Single Asset Dual-Branding)
- * 1. Ultra HD Quality (1.0 Jpeg)
- * 2. Branding Phase 1: Logo as Central Watermark (80% Width, 40% Opacity)
- * 3. Branding Phase 2: Logo as Smart Corner (25% Width, Variable Padding)
- * 4. Generator-friendly memory disposal
+ * HD Liquid Image Processor (V2.5 - Production Optimized)
+ * 1. Forced 1:1 Aspect Ratio (Square) output
+ * 2. Ultra HD Quality (1.0 Jpeg)
+ * 3. Dual-Branding Phase (Watermark + Smart Corner)
+ * 4. Aggressive memory reclamation
  */
 export const processProductImage = async (
   sourceUrl: string,
   placement: SmartPlacement,
   options: ProcessingOptions
 ): Promise<{ fullRes: string; thumb: string }> => {
-  const { brandLogo, logoPadding } = options;
+  const { brandLogo, logoPadding, forceSquare = true } = options;
 
   const mainImg = await loadImage(sourceUrl);
   const canvas = document.createElement('canvas');
@@ -32,37 +31,55 @@ export const processProductImage = async (
 
   if (!ctx) throw new Error('Canvas context unavailable');
 
-  // Lock resolution (No Downsampling)
-  canvas.width = mainImg.width;
-  canvas.height = mainImg.height;
+  // Determine output dimensions - Force 1:1 if requested
+  let outWidth, outHeight;
+  if (forceSquare) {
+    const size = Math.max(mainImg.width, mainImg.height);
+    outWidth = size;
+    outHeight = size;
+  } else {
+    outWidth = mainImg.width;
+    outHeight = mainImg.height;
+  }
 
-  // Set production-grade interpolation (LANCZOS equivalent)
+  canvas.width = outWidth;
+  canvas.height = outHeight;
+
+  // Set production-grade interpolation
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
 
-  // Draw background product
-  ctx.drawImage(mainImg, 0, 0, canvas.width, canvas.height);
+  // Draw background - Center fit the product image into the square canvas
+  if (forceSquare) {
+    const scale = Math.min(outWidth / mainImg.width, outHeight / mainImg.height);
+    const x = (outWidth - mainImg.width * scale) / 2;
+    const y = (outHeight - mainImg.height * scale) / 2;
+    // Fill background with white or transparency (using white for JPEG production)
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, outWidth, outHeight);
+    ctx.drawImage(mainImg, x, y, mainImg.width * scale, mainImg.height * scale);
+  } else {
+    ctx.drawImage(mainImg, 0, 0, outWidth, outHeight);
+  }
 
   if (brandLogo) {
     const logoImg = await loadImage(brandLogo);
 
     // STEP 1: CENTRAL WATERMARK (80% Width, 40% Opacity)
     ctx.save();
-    const wmWidth = canvas.width * 0.8;
+    const wmWidth = outWidth * 0.8;
     const wmHeight = (logoImg.height / logoImg.width) * wmWidth;
-    const wmX = (canvas.width - wmWidth) / 2;
-    const wmY = (canvas.height - wmHeight) / 2;
+    const wmX = (outWidth - wmWidth) / 2;
+    const wmY = (outHeight - wmHeight) / 2;
 
-    ctx.globalAlpha = 0.40; // High Visibility Spec
+    ctx.globalAlpha = 0.40;
     ctx.drawImage(logoImg, wmX, wmY, wmWidth, wmHeight);
     ctx.restore();
 
     // STEP 2: SMART CORNER LOGO (25% Width, Variable Padding)
-    const cWidth = canvas.width * 0.25; 
+    const cWidth = outWidth * 0.25; 
     const cHeight = (logoImg.height / logoImg.width) * cWidth;
-    
-    // User padding (scaled to 1000px base)
-    const scaleFactor = canvas.width / 1000;
+    const scaleFactor = outWidth / 1000;
     const padding = logoPadding * scaleFactor;
 
     let cX = padding;
@@ -70,26 +87,24 @@ export const processProductImage = async (
 
     switch (placement.position) {
       case 'top-right':
-        cX = canvas.width - cWidth - padding;
+        cX = outWidth - cWidth - padding;
         break;
       case 'bottom-left':
-        cY = canvas.height - cHeight - padding;
+        cY = outHeight - cHeight - padding;
         break;
       case 'bottom-right':
-        cX = canvas.width - cWidth - padding;
-        cY = canvas.height - cHeight - padding;
+        cX = outWidth - cWidth - padding;
+        cY = outHeight - cHeight - padding;
         break;
       case 'center':
-        cX = (canvas.width - cWidth) / 2;
-        cY = (canvas.height - cHeight) / 2;
+        cX = (outWidth - cWidth) / 2;
+        cY = (outHeight - cHeight) / 2;
         break;
       default: // top-left
         break;
     }
 
     ctx.drawImage(logoImg, cX, cY, cWidth, cHeight);
-    
-    // Explicit cleanup
     (logoImg as any) = null;
   }
 
@@ -100,15 +115,16 @@ export const processProductImage = async (
   const thumbCanvas = document.createElement('canvas');
   const tCtx = thumbCanvas.getContext('2d');
   thumbCanvas.width = 150;
-  thumbCanvas.height = (canvas.height / canvas.width) * 150;
-  tCtx?.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+  thumbCanvas.height = 150;
+  tCtx?.drawImage(canvas, 0, 0, 150, 150);
   const thumb = thumbCanvas.toDataURL('image/jpeg', 0.5);
 
-  // Aggressive Memory Purge for 1000+ files
+  // Memory Cleanup
   canvas.width = 0;
   canvas.height = 0;
   thumbCanvas.width = 0;
   thumbCanvas.height = 0;
+  (mainImg as any) = null;
   
   return { fullRes, thumb };
 };

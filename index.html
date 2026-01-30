@@ -9,15 +9,22 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
     
-    body { 
-      font-family: 'Inter', sans-serif;
+    html, body {
+      height: 100%;
+      width: 100%;
       margin: 0;
       padding: 0;
-      overflow: hidden;
-      background: #020617; 
     }
 
-    /* Production Liquid Background - 3 Orbs: Blue, Purple, Pink */
+    body { 
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+      /* Fallback solid background if animations fail */
+      background-color: #020617; 
+      color: #f8fafc;
+    }
+
+    /* Production Liquid Background - Strictly set to z-index: -1 */
     .liquid-bg {
       position: fixed;
       top: 0;
@@ -27,6 +34,7 @@
       z-index: -1;
       overflow: hidden;
       background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
+      pointer-events: none;
     }
 
     .blob {
@@ -66,6 +74,17 @@
       0% { transform: translate(0, 0) scale(1) rotate(0deg); }
       50% { transform: translate(15%, 10%) scale(1.2) rotate(5deg); }
       100% { transform: translate(-5%, 15%) scale(0.9) rotate(-5deg); }
+    }
+
+    /* Main Container - Ensuring visibility and transparency */
+    #root {
+      background: transparent !important;
+      min-height: 100vh;
+      width: 100%;
+      position: relative;
+      z-index: 1; /* Content stays above background */
+      display: block !important;
+      visibility: visible !important;
     }
 
     /* iOS Glassmorphism V3 */

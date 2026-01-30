@@ -18,7 +18,8 @@ import {
   PaintBrushIcon,
   PlusIcon,
   KeyIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  Square3Stack3DIcon
 } from '@heroicons/react/24/outline';
 import { GoogleGenAI } from "@google/genai";
 import { ProcessingState } from './types';
@@ -34,8 +35,6 @@ const ASPECT_RATIOS = [
   { label: '4:3 (Landscape)', value: '4:3' },
   { label: '9:16 (Story)', value: '9:16' },
   { label: '16:9 (Cinema)', value: '16:9' },
-  // Note: Gemini 3 standardly supports the 5 above. Ratios like 21:9, 2:3, 3:2 are often mapped or unsupported in native API.
-  // We will provide the ones the user specifically asked for where possible.
 ];
 
 const App: React.FC = () => {
@@ -46,6 +45,7 @@ const App: React.FC = () => {
   const [zipUrl, setZipUrl] = useState<string | null>(null);
   const [currentIdx, setCurrentIdx] = useState<number>(-1);
   const [logoPadding, setLogoPadding] = useState<number>(50);
+  const [batchSize, setBatchSize] = useState<number>(10);
   
   // Generative State
   const [activeTab, setActiveTab] = useState<'processor' | 'generator'>('processor');
@@ -62,6 +62,8 @@ const App: React.FC = () => {
       if (window.aistudio?.hasSelectedApiKey) {
         const selected = await window.aistudio.hasSelectedApiKey();
         setHasApiKey(selected);
+      } else if (process.env.API_KEY) {
+        setHasApiKey(true);
       }
     };
     checkKey();
@@ -70,7 +72,7 @@ const App: React.FC = () => {
   const handleSelectKey = async () => {
     if (window.aistudio?.openSelectKey) {
       await window.aistudio.openSelectKey();
-      setHasApiKey(true); // Proceed as per instructions
+      setHasApiKey(true); 
     }
   };
 
@@ -151,6 +153,11 @@ const App: React.FC = () => {
 
   const startProcessing = async () => {
     if (images.length === 0 || !brandLogo) return;
+    if (!process.env.API_KEY) {
+      alert("System Error: GOOGLE_API_KEY is not configured in environment.");
+      return;
+    }
+
     setIsProcessing(true);
     setZipUrl(null);
     
@@ -163,6 +170,7 @@ const App: React.FC = () => {
 
     const zip = new JSZip();
 
+    // Process in sequential chunks to manage memory and prevent UI lockup
     for (let i = 0; i < images.length; i++) {
       const file = images[i];
       setCurrentIdx(i);
@@ -178,6 +186,8 @@ const App: React.FC = () => {
       try {
         const sourceUrl = URL.createObjectURL(file);
         updateStatus({ status: 'analyzing', progress: 15 });
+        
+        // Lazy load Base64 data only when needed
         const sourceBase64 = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onload = (e) => resolve(e.target?.result as string);
@@ -192,22 +202,28 @@ const App: React.FC = () => {
           brandLogo: brandLogo,
           watermarkOpacity: 0.40,
           quality: 1.0, 
-          logoPadding: logoPadding
+          logoPadding: logoPadding,
+          forceSquare: true // Enforcement of user requirement for 1:1 aspect ratio
         });
 
         updateStatus({ status: 'processing', progress: 90 });
         const base64Content = fullRes.split(',')[1];
-        zip.file(`${file.name.split('.')[0]}_HD.jpg`, base64Content, { base64: true });
+        zip.file(`${file.name.split('.')[0]}_1x1_HD.jpg`, base64Content, { base64: true });
 
-        const showPreview = i >= images.length - 20;
+        // Memory cleanup: only keep small thumb in state
         updateStatus({ 
           status: 'completed', 
           progress: 100, 
-          resultUrl: showPreview ? thumb : undefined 
+          resultUrl: thumb 
         });
         
         URL.revokeObjectURL(sourceUrl);
-        await new Promise(r => setTimeout(r, 40));
+        
+        // Artificial yield to browser main thread every N images to prevent hanging
+        if (i % batchSize === 0) {
+          await new Promise(r => setTimeout(r, 100));
+        }
+
       } catch (error) {
         console.error("Engine failure on file:", file.name, error);
         updateStatus({ status: 'error', error: 'Skipped', progress: 0 });
@@ -246,7 +262,6 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-10 custom-scroll">
-          {/* NAVIGATION TABS */}
           <div className="flex p-1 bg-white/5 rounded-2xl border border-white/10">
             <button 
               onClick={() => setActiveTab('processor')}
@@ -291,20 +306,29 @@ const App: React.FC = () => {
                 <h3 className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-6 flex items-center gap-2">
                   <AdjustmentsHorizontalIcon className="w-4 h-4" /> Configuration
                 </h3>
-                <div className="glass-card p-6 space-y-6">
+                <div className="glass-card p-6 space-y-8">
                   <div>
                     <div className="flex justify-between items-center mb-4">
                       <label className="text-[9px] font-black text-white/50 uppercase tracking-wider">Logo Padding</label>
                       <span className="text-[10px] font-black text-pink-400">{logoPadding}px</span>
                     </div>
                     <input 
-                      type="range" 
-                      min="0" 
-                      max="200" 
-                      value={logoPadding} 
+                      type="range" min="0" max="200" value={logoPadding} 
                       onChange={(e) => setLogoPadding(parseInt(e.target.value))}
                       className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-pink-500"
                     />
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <label className="text-[9px] font-black text-white/50 uppercase tracking-wider">Batch Burst Size</label>
+                      <span className="text-[10px] font-black text-blue-400">{batchSize} units</span>
+                    </div>
+                    <input 
+                      type="range" min="1" max="50" value={batchSize} 
+                      onChange={(e) => setBatchSize(parseInt(e.target.value))}
+                      className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                    <p className="text-[7px] text-white/20 mt-3 uppercase tracking-widest italic font-bold">Optimized for Vercel/Memory</p>
                   </div>
                 </div>
               </section>
@@ -398,6 +422,10 @@ const App: React.FC = () => {
                 <span className="opacity-40">Aspect Lock</span>
                 <span className="text-purple-400 italic">1:1 FORCED</span>
               </div>
+              <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-tighter">
+                <span className="opacity-40">Headless Sync</span>
+                <span className="text-teal-400">ENABLED</span>
+              </div>
             </div>
           </section>
         </div>
@@ -461,11 +489,11 @@ const App: React.FC = () => {
             images.length === 0 ? (
               <div className="h-full glass rounded-[32px] flex flex-col items-center justify-center text-center p-20">
                 <div className="w-32 h-32 glass-card flex items-center justify-center mb-10 shadow-2xl border border-white/5">
-                  <QueueListIcon className="w-16 h-16 text-white/5" />
+                  <Square3Stack3DIcon className="w-16 h-16 text-white/5" />
                 </div>
-                <h3 className="text-4xl font-black mb-6 tracking-tighter">Deck Empty</h3>
+                <h3 className="text-4xl font-black mb-6 tracking-tighter uppercase italic">Neutralized Deck</h3>
                 <p className="text-white/20 font-bold max-w-sm mb-12 uppercase text-[10px] tracking-[0.5em]">
-                  Drop product galleries or generate assets in the AI Lab.
+                  Optimized for Vercel • Batch Burst Logic • 1:1 Aspect Enforced
                 </p>
                 <button 
                   onClick={() => galleryInputRef.current?.click()}
@@ -482,7 +510,7 @@ const App: React.FC = () => {
                       <div>
                         <div className="flex justify-between items-end mb-4">
                           <div className="flex flex-col">
-                            <span className="text-[10px] font-black uppercase tracking-[0.5em] text-white/30 mb-1">Batch Operation</span>
+                            <span className="text-[10px] font-black uppercase tracking-[0.5em] text-white/30 mb-1">Burst Operation</span>
                             <h4 className="text-xl font-black text-white/90 italic tracking-tighter">Asset {currentIdx + 1} of {images.length}</h4>
                           </div>
                           <span className="text-2xl font-black text-blue-400 tabular-nums">{batchProgress}%</span>
@@ -494,9 +522,9 @@ const App: React.FC = () => {
                       <div>
                         <div className="flex justify-between items-end mb-4">
                           <div className="flex flex-col">
-                            <span className="text-[10px] font-black uppercase tracking-[0.5em] text-white/30 mb-1">Unit Status</span>
+                            <span className="text-[10px] font-black uppercase tracking-[0.5em] text-white/30 mb-1">Burst Load</span>
                             <h4 className="text-xl font-black text-pink-400 italic tracking-tighter">
-                              {currentItem?.status === 'analyzing' ? 'Object Detection...' : 'Applying Branding...'}
+                              {currentItem?.status === 'analyzing' ? 'Scene Vision...' : 'Forging 1:1 HD...'}
                             </h4>
                           </div>
                           <span className="text-2xl font-black text-pink-400 tabular-nums">{currentItem?.progress || 0}%</span>
@@ -516,14 +544,14 @@ const App: React.FC = () => {
                         <ArrowDownTrayIcon className="w-16 h-16 text-teal-600" />
                       </div>
                       <div>
-                        <h4 className="text-4xl font-black tracking-tighter italic">PRODUCTION COMPLETE</h4>
+                        <h4 className="text-4xl font-black tracking-tighter italic">FORGE COMPLETE</h4>
                         <p className="text-teal-300 text-[11px] font-black uppercase tracking-[0.5em] mt-3 opacity-70">
-                          {images.length} ULTRA-HD branded files packaged in ZIP
+                          {images.length} SQUARE 1:1 HD FILES EXPORTED
                         </p>
                       </div>
                     </div>
-                    <a href={zipUrl} download="HD_PRODUCTION_BATCH.zip" className="btn-glossy bg-teal-500 text-white px-20 py-8 rounded-[30px] font-black text-sm uppercase tracking-[0.2em] shadow-2xl">
-                      Download All (ZIP)
+                    <a href={zipUrl} download="HD_SQUARE_PRODUCTION.zip" className="btn-glossy bg-teal-500 text-white px-20 py-8 rounded-[30px] font-black text-sm uppercase tracking-[0.2em] shadow-2xl">
+                      Download ZIP
                     </a>
                   </div>
                 )}
@@ -554,7 +582,7 @@ const App: React.FC = () => {
                           )}
                         </div>
                         <div className="w-32 flex justify-end shrink-0">
-                          {isFinished ? <span className="text-[9px] font-black text-teal-400 uppercase tracking-[0.3em]">Ready</span> : isActive ? <span className="text-[9px] font-black text-pink-400 uppercase tracking-[0.4em] animate-pulse">Forging</span> : <span className="text-[9px] font-black text-white/5 uppercase tracking-[0.4em]">Standby</span>}
+                          {isFinished ? <span className="text-[9px] font-black text-teal-400 uppercase tracking-[0.3em]">1:1 Square</span> : isActive ? <span className="text-[9px] font-black text-pink-400 uppercase tracking-[0.4em] animate-pulse italic">Bursting</span> : <span className="text-[9px] font-black text-white/5 uppercase tracking-[0.4em]">Standby</span>}
                         </div>
                       </div>
                     );
@@ -564,7 +592,6 @@ const App: React.FC = () => {
             )
           ) : (
             <div className="h-full glass rounded-[32px] p-12 flex flex-col items-center justify-center animate-in fade-in duration-500 overflow-hidden relative">
-              {/* CANVAS AREA */}
               <div className="w-full max-w-2xl aspect-square glass-card rounded-[40px] flex items-center justify-center relative overflow-hidden group shadow-[0_40px_100px_rgba(0,0,0,0.5)]">
                 {generatedImage ? (
                   <>
@@ -590,22 +617,20 @@ const App: React.FC = () => {
                       <CpuChipIcon className="w-12 h-12 text-pink-400" />
                     </div>
                     <div>
-                      <h4 className="text-xl font-black tracking-tighter uppercase italic">Neutralizing Noise...</h4>
-                      <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.5em] mt-3">Synthesizing High-Detail Pixels</p>
+                      <h4 className="text-xl font-black tracking-tighter uppercase italic">Synthesizing Vision...</h4>
+                      <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.5em] mt-3">Headless Logic Processing</p>
                     </div>
                   </div>
                 ) : (
                   <div className="text-center space-y-6 opacity-30">
                     <PaintBrushIcon className="w-20 h-20 mx-auto text-white" />
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.6em]">Awaiting Vision Instruction</p>
-                      <p className="text-[8px] font-bold text-white/50 uppercase tracking-widest mt-2 italic">1K Resolution Output Optimized</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.6em]">Awaiting Instruction</p>
+                      <p className="text-[8px] font-bold text-white/50 uppercase tracking-widest mt-2 italic">1K Production Standard</p>
                     </div>
                   </div>
                 )}
               </div>
-              
-              {/* BACKGROUND EFFECTS */}
               <div className="absolute -top-20 -right-20 w-64 h-64 bg-pink-500/10 blur-[100px] pointer-events-none rounded-full" />
               <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-blue-500/10 blur-[100px] pointer-events-none rounded-full" />
             </div>

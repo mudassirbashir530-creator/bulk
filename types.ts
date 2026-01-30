@@ -21,12 +21,14 @@ export interface ProcessingState {
   progress: number;
   resultUrl?: string;
   error?: string;
-  placement?: SmartPlacement; // Store placement info for visualization
+  placement?: SmartPlacement; 
 }
 
 export interface ProcessingOptions {
-  brandLogo?: string; // base64 source for both watermark and logo
+  brandLogo?: string; 
   watermarkOpacity: number;
   quality: number;
-  logoPadding: number; // Added user-defined padding
+  logoPadding: number;
+  batchSize?: number;
+  forceSquare?: boolean;
 }
